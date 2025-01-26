@@ -21,8 +21,9 @@ exports.signup = async (req, res) => {
     }
 
     const user = new User({ email, password });
+    const token = user.generateAuthToken(); 
+    user.token = token;
     await user.save();
-    const token = user.generateAuthToken();
 
     res.status(201).json({
       user: { email: user.email, subscription: user.subscription },
@@ -48,9 +49,23 @@ exports.login = async (req, res) => {
     }
 
     const token = user.generateAuthToken();
+    console.log("Generated Token:", token);
     res.status(200).json({
       token,
       user: { email: user.email, subscription: user.subscription },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getCurrent = async (req, res) => {
+  try {
+    const user = req.user;
+    console.log('User Found:', user);
+    res.status(200).json({
+      email: user.email,
+      subscription: user.subscription,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

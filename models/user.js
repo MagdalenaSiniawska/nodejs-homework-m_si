@@ -23,9 +23,16 @@ const userSchema = new mongoose.Schema({
   },
 });
 
+// userSchema.methods.generateAuthToken = function () {
+//   const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+//   this.token = token;
+//   return token;
+// };
+
 userSchema.methods.generateAuthToken = function () {
-  const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-  this.token = token;
+  const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
+    expiresIn: '1h',
+  });
   return token;
 };
 
@@ -36,6 +43,7 @@ userSchema.pre('save', async function (next) {
   }
   next();
 });
+
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;

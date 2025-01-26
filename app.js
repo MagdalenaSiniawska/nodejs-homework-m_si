@@ -2,8 +2,11 @@ const express = require('express');
 const logger = require('morgan');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-dotenv.config();
+// const dotenv = require('dotenv');
+// dotenv.config();
+
+require('dotenv').config();
+// console.log(process.env.JWT_SECRET);
 
 const contactsRouter = require('./routes/api/contacts');
 const usersRouter = require('./routes/api/users');
@@ -33,7 +36,7 @@ const startServer = async () => {
     });
     console.log('Database connection successful');
 
-    const PORT = process.env.PORT || 4000;
+    const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`Server running. Use our API on port: ${PORT}`);
     });
