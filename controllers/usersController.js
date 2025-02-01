@@ -5,7 +5,7 @@ const gravatar = require('gravatar');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
-const Jimp = require('jimp');
+const sharp = require('sharp');
 
 const userSchema = Joi.object({
   email: Joi.string().email().required(),
@@ -25,26 +25,63 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+async function deleteFileWithDelay(filePath) {
+  try {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await fs.unlink(filePath);
+    console.log('File deleted successfully');
+  } catch (error) {
+    console.error('Error deleting file:', error);
+  }
+}
+
+exports.uploadMiddleware = upload.single('avatar');
+
 exports.updateAvatar = async (req, res) => {
+  console.log("User in request:", req.user);
+
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authorized" });
+  }
+
+  console.log("File received:", req.file);
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
   const { path: tempPath, originalname } = req.file;
   const { id } = req.user;
+  console.log("User ID:", id);
 
   try {
     const avatarName = `${id}-${originalname}`;
     const avatarPath = path.join(avatarsDir, avatarName);
 
-    const image = await Jimp.read(tempPath);
-    await image.resize(250, 250).writeAsync(avatarPath);
+    console.log("Processing image...");
 
-    await fs.unlink(tempPath);
+    await sharp(tempPath)
+      .resize(250, 250)
+      .toFile(avatarPath);
+
+    await deleteFileWithDelay(tempPath);
 
     const avatarURL = `/avatars/${avatarName}`;
-    await User.findByIdAndUpdate(id, { avatarURL });
+    console.log("Avatar updated:", avatarURL);
 
-    res.json({ avatarURL });
+    const updatedUser = await User.findByIdAndUpdate(id, { avatarURL }, { new: true });
+
+    res.json({
+      avatarURL,
+      user: {
+        email: updatedUser.email,
+        subscription: updatedUser.subscription,
+        avatarURL: updatedUser.avatarURL,
+      }
+    });
   } catch (error) {
-    await fs.unlink(tempPath);
-    res.status(500).json({ message: 'Failed to process the avatar' });
+    console.error("Error updating avatar:", error);
+    await deleteFileWithDelay(tempPath).catch(() => {});
+    res.status(500).json({ message: `Failed to process the avatar: ${error.message}` });
   }
 };
 
@@ -65,6 +102,7 @@ exports.signup = async (req, res) => {
     const avatarURL = gravatar.url(email, { s: '250', d: 'retro' }, true);
     const user = new User({ email, password, avatarURL });
     const token = user.generateAuthToken();
+    
     user.token = token;
     await user.save();
 
@@ -92,6 +130,10 @@ exports.login = async (req, res) => {
     }
 
     const token = user.generateAuthToken();
+    
+    user.token = token;
+    await user.save();
+
     res.status(200).json({
       token,
       user: { email: user.email, subscription: user.subscription, avatarURL: user.avatarURL },
