@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const gravatar = require('gravatar');
 
 const userSchema = new mongoose.Schema({
   email: {
@@ -12,6 +13,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Password is required'],
   },
+  
   subscription: {
     type: String,
     enum: ['starter', 'pro', 'business'],
@@ -20,6 +22,12 @@ const userSchema = new mongoose.Schema({
   token: {
     type: String,
     default: null,
+  },
+  avatarURL: {
+    type: String,
+    default: function () {
+      return gravatar.url(this.email, { s: '250', d: 'retro' }, true);
+    },
   },
 });
 
@@ -41,9 +49,13 @@ userSchema.pre('save', async function (next) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
+
+  if (this.isNew) {
+    this.avatarURL = gravatar.url(this.email, { s: '250', d: 'retro' }, true);
+  }
+
   next();
 });
-
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;
