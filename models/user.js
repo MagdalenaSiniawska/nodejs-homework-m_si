@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const gravatar = require('gravatar');
+const crypto = require('crypto');
 
 const userSchema = new mongoose.Schema({
   email: {
@@ -29,13 +30,25 @@ const userSchema = new mongoose.Schema({
       return gravatar.url(this.email, { s: '250', d: 'retro' }, true);
     },
   },
+  verify: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: {
+    type: String,
+    // required: function () {
+    //   return !this.verify;
+    // },
+    default: '',
+  },
 });
 
-// userSchema.methods.generateAuthToken = function () {
-//   const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-//   this.token = token;
-//   return token;
-// };
+
+userSchema.methods.generateVerificationToken = function () {
+  const verificationToken = crypto.randomBytes(16).toString('hex');
+  this.verificationToken = verificationToken;
+  return verificationToken;
+};
 
 userSchema.methods.generateAuthToken = function () {
   const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, {

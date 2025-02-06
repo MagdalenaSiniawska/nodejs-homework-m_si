@@ -3,14 +3,12 @@ const logger = require('morgan');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
-// const dotenv = require('dotenv');
-// dotenv.config();
-
 require('dotenv').config();
-// console.log(process.env.JWT_SECRET);
 
 const contactsRouter = require('./routes/api/contacts');
 const usersRouter = require('./routes/api/users');
+const userVerificationRouter = require('./routes/api/userRoutes');
+
 const app = express();
 
 const formatsLogger = app.get('env') === 'development' ? 'dev' : 'short';
@@ -22,6 +20,7 @@ app.use('/avatars', express.static(path.join(__dirname, 'public/avatars')));
 
 app.use('/api/contacts', contactsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api', userVerificationRouter);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Not found' });

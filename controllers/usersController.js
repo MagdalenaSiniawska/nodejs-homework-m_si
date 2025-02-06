@@ -6,6 +6,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const sharp = require('sharp');
+const crypto = require('crypto');
+const sgMail = require('@sendgrid/mail');
 
 const userSchema = Joi.object({
   email: Joi.string().email().required(),
@@ -36,6 +38,28 @@ async function deleteFileWithDelay(filePath) {
 }
 
 exports.uploadMiddleware = upload.single('avatar');
+
+// Konfiguracja SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// Funkcja wysyłania e-maila weryfikacyjnego
+async function sendVerificationEmail(email, verificationToken) {
+  const verificationUrl = `${process.env.BASE_URL}/api/users/verify/${verificationToken}`;
+
+  const msg = {
+    to: email,
+    from: 'magdalena.paszke94@op.pl',
+    subject: 'Please verify your email',
+    html: `<p>Click the link below to verify your email:</p><a href="${verificationUrl}">${verificationUrl}</a>`
+  };
+
+  try {
+    await sgMail.send(msg);
+    console.log('Verification email sent successfully');
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+  }
+}
 
 exports.updateAvatar = async (req, res) => {
   console.log("User in request:", req.user);
@@ -99,16 +123,22 @@ exports.signup = async (req, res) => {
       return res.status(409).json({ message: 'Email in use' });
     }
 
+    const verificationToken = crypto.randomBytes(16).toString('hex');
     const avatarURL = gravatar.url(email, { s: '250', d: 'retro' }, true);
-    const user = new User({ email, password, avatarURL });
+
+    const user = new User({ email, password, avatarURL, verificationToken });
+
     const token = user.generateAuthToken();
-    
     user.token = token;
+
     await user.save();
+
+    await sendVerificationEmail(email, verificationToken);
 
     res.status(201).json({
       user: { email: user.email, subscription: user.subscription, avatarURL: user.avatarURL },
       token,
+      verificationToken,  
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -130,8 +160,8 @@ exports.login = async (req, res) => {
     }
 
     const token = user.generateAuthToken();
-    
     user.token = token;
+
     await user.save();
 
     res.status(200).json({
@@ -156,4 +186,45 @@ exports.getCurrent = async (req, res) => {
   }
 };
 
-exports.uploadMiddleware = upload.single('avatar');
+exports.verify = async (req, res) => {
+  try {
+    const { verificationToken } = req.params;
+    console.log('Otrzymany token z URL:', verificationToken);
+    const user = await User.findOne({ verificationToken });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    user.verify = true;
+    user.verificationToken = undefined;
+    await user.save();
+
+    res.status(200).json({ message: 'Verification successful' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  };
+};
+
+exports.resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "missing required field email" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.verify) {
+      return res.status(400).json({ message: "Verification has already been passed" });
+    }
+
+    await sendVerificationEmail(email, user.verificationToken);
+    return res.status(200).json({ message: "Verification email sent" });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
